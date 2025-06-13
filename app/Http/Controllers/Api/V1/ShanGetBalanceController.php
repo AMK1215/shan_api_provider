@@ -59,7 +59,7 @@ class ShanGetBalanceController extends Controller
         // 4. Validate product_codes from DB
         $allowed_product_codes = Product::where('active', true)->pluck('code')->toArray();
 
-        $callbackUrl = $operator->callback_url ?? 'https://a1yoma.online/api';
+        $callbackUrl = $operator->callback_url ?? 'https://a1yoma.online/api/get-balance';
 
     $results = [];
     foreach ($request->batch_requests as $item) {

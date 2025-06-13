@@ -12,15 +12,15 @@ class OperatorSeeder extends Seeder
         Operator::create([
             'code' => 'a3h1',
             'secret_key' => 'shana3h1', // change to a secure value
-            'callback_url' => 'https://a1yoma.online/api',
+            'callback_url' => 'https://a1yoma.online/api/get-balance',
             'active' => true,
         ]);
 
         // You can add more operators here
         Operator::create([
-            'code' => 'XYZ1',
-            'secret_key' => 'anothersecret',
-            'callback_url' => 'https://a1yoma.online/api',
+            'code' => 'a3h1',
+            'secret_key' => 'shana3h1',
+            'callback_url' => 'https://a1yoma.online/api/launch-game',
             'active' => true,
         ]);
     }
