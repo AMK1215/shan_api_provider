@@ -21,5 +21,5 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 // shan api provider
 Route::group(['prefix' => 'shan'], function () {
-    Route::get('balance', [ShanGetBalanceController::class, 'shangetbalance']);
+    Route::post('balance', [ShanGetBalanceController::class, 'shangetbalance']);
 });
