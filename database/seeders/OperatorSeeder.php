@@ -12,6 +12,7 @@ class OperatorSeeder extends Seeder
         Operator::create([
             'code' => 'a3h1',
             'secret_key' => 'shana3h1', // change to a secure value
+            'callback_url' => 'https://a1yoma.online/api',
             'active' => true,
         ]);
 
@@ -19,6 +20,7 @@ class OperatorSeeder extends Seeder
         Operator::create([
             'code' => 'XYZ1',
             'secret_key' => 'anothersecret',
+            'callback_url' => 'https://a1yoma.online/api',
             'active' => true,
         ]);
     }

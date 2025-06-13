@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Operator;
 use App\Models\Product;
+use Illuminate\Support\Facades\Http;
 
 class ShanGetBalanceController extends Controller
 {
@@ -58,24 +59,68 @@ class ShanGetBalanceController extends Controller
         // 4. Validate product_codes from DB
         $allowed_product_codes = Product::where('active', true)->pluck('code')->toArray();
 
-        $results = [];
-        foreach ($request->batch_requests as $item) {
-            $status = in_array($item['product_code'], $allowed_product_codes)
-                        ? 'success'
-                        : 'invalid_product_code';
+        $callbackUrl = $operator->callback_url ?? 'https://a1yoma.online/api';
 
-            $results[] = [
-                'member_account' => $item['member_account'],
-                'product_code' => $item['product_code'],
-                'balance' => $item['balance'], // as sent from external
-                'currency' => $request->currency,
-                'status' => $status,
-            ];
+    $results = [];
+    foreach ($request->batch_requests as $item) {
+        // Build the payload for the callback
+        $callbackPayload = [
+            'member_account' => $item['member_account'],
+            'product_code'   => $item['product_code'],
+        ];
+
+        // Optionally, add security (sign, operator_code, etc) as required by the customer
+        // Example:
+        // $callbackPayload['operator_code'] = $operator->code;
+        // $callbackPayload['sign'] = md5(...);
+
+        // Make the actual request to customer server
+        try {
+            $response = Http::timeout(5)->post($callbackUrl, $callbackPayload);
+            if ($response->successful()) {
+                $callbackData = $response->json();
+                $balance = $callbackData['balance'] ?? null;
+                $status  = 'success';
+            } else {
+                $balance = null;
+                $status  = 'callback_failed';
+            }
+        } catch (\Exception $e) {
+            $balance = null;
+            $status  = 'callback_exception';
         }
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $results
-        ]);
+        $results[] = [
+            'member_account' => $item['member_account'],
+            'product_code'   => $item['product_code'],
+            'balance'        => $balance,
+            'currency'       => $request->currency,
+            'status'         => $status,
+        ];
+    }
+
+    return response()->json([
+        'status' => 'success',
+        'data' => $results
+    ]);
+        // $results = [];
+        // foreach ($request->batch_requests as $item) {
+        //     $status = in_array($item['product_code'], $allowed_product_codes)
+        //                 ? 'success'
+        //                 : 'invalid_product_code';
+
+        //     $results[] = [
+        //         'member_account' => $item['member_account'],
+        //         'product_code' => $item['product_code'],
+        //         'balance' => $item['balance'], // as sent from external
+        //         'currency' => $request->currency,
+        //         'status' => $status,
+        //     ];
+        // }
+
+        // return response()->json([
+        //     'status' => 'success',
+        //     'data' => $results
+        // ]);
     }
 }

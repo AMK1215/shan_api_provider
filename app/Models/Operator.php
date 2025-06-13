@@ -9,5 +9,5 @@ class Operator extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['code', 'secret_key', 'active'];
+    protected $fillable = ['code', 'secret_key', 'active', 'callback_url'];
 }
