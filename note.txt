@@ -1,0 +1,29 @@
+CREATE DATABASE shan;
+CREATE USER shan_user WITH PASSWORD 'luckymillion';
+GRANT ALL PRIVILEGES ON DATABASE shan TO shan_user;
+ALTER USER shan_user WITH PASSWORD 'luckymillion';
+
+sudo -i -u postgres
+psql -d shan
+
+psql -h 127.0.0.1 -U shan_user -d shan
+
+GRANT ALL ON SCHEMA public TO shan_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO shan_user;
+
+
+GRANT ALL ON SCHEMA public TO shan_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO shan_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO shan_user;
+sudo -i -u postgres
+psql -d shan
+ALTER SCHEMA public OWNER TO shan_user;
+GRANT ALL ON SCHEMA public TO shan_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO shan_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO shan_user;
+
+
+sudo chown -R www-data:www-data /var/www/shan_api_provider/storage
+sudo chown -R www-data:www-data /var/www/shan_api_provider/bootstrap/cache
+sudo chmod -R 775 /var/www/shan_api_provider/storage
+sudo chmod -R 775 /var/www/shan_api_provider/bootstrap/cache
