@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Validator;
 use App\Models\Operator;
 use App\Models\Product;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Config;
+
 
 class ShanGetBalanceController extends Controller
 {
@@ -103,24 +105,72 @@ class ShanGetBalanceController extends Controller
         'status' => 'success',
         'data' => $results
     ]);
-        // $results = [];
-        // foreach ($request->batch_requests as $item) {
-        //     $status = in_array($item['product_code'], $allowed_product_codes)
-        //                 ? 'success'
-        //                 : 'invalid_product_code';
-
-        //     $results[] = [
-        //         'member_account' => $item['member_account'],
-        //         'product_code' => $item['product_code'],
-        //         'balance' => $item['balance'], // as sent from external
-        //         'currency' => $request->currency,
-        //         'status' => $status,
-        //     ];
-        // }
-
-        // return response()->json([
-        //     'status' => 'success',
-        //     'data' => $results
-        // ]);
+        
     }
+
+    public function launch(Request $request)
+    {
+        // Validate input
+        $validator = Validator::make($request->all(), [
+            'member_account' => 'required|string|max:50',
+            'operator_code'  => 'required|string', // if you want to validate operator as well
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status'  => 'fail',
+                'message' => 'Validation error',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+
+        $operator_code = $request->operator_code;
+        $member_account = $request->member_account;
+        $currency = 'MMK';
+        $request_time = time();
+        $secret_key = Config::get('seamless_key.secret_key'); // or get from DB for the operator
+        $sign = md5($operator_code . $request_time . 'getbalance' . $secret_key);
+
+        // Prepare GetBalance API request payload
+        $getBalancePayload = [
+            'batch_requests' => [
+                [
+                    'member_account' => $member_account,
+                    'product_code'   => 1002, // or as required
+                ]
+            ],
+            'operator_code' => $operator_code,
+            'currency'      => $currency,
+            'request_time'  => $request_time,
+            'sign'          => $sign,
+        ];
+
+        // Call your own GetBalance API (internal call)
+        $getBalanceApiUrl = url('/api/shan/balance'); // or full URL if needed
+
+        $response = Http::post($getBalanceApiUrl, $getBalancePayload);
+
+        if (!$response->successful()) {
+            return response()->json([
+                'status' => 'fail',
+                'message' => 'Unable to get balance',
+            ], 500);
+        }
+
+        $resultData = $response->json();
+        $balance = 0;
+
+        if (isset($resultData['data'][0]['balance'])) {
+            $balance = $resultData['data'][0]['balance'];
+        }
+
+        // Build launch game URL
+        $launchGameUrl = 'https://goldendragon7.pro/?user_name=' . urlencode($member_account) . '&balance=' . $balance;
+
+        return response()->json([
+            'status' => 'success',
+            'launch_game_url' => $launchGameUrl
+        ]);
+    }
+
 }
