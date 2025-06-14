@@ -92,7 +92,7 @@ class ShanLaunchGameController extends Controller
         }
 
         // 4. Build launch game URL
-        $launchGameUrl = 'https://goldendragon7.pro/?member_account=' . urlencode($member_account) . '&balance=' . $balance;
+        $launchGameUrl = 'https://goldendragon7.pro/?user_name=' . urlencode($member_account) . '&balance=' . $balance;
 
         return response()->json([
             'status' => 'success',
