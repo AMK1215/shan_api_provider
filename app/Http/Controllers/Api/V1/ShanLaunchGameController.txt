@@ -30,8 +30,6 @@ class ShanLaunchGameController extends Controller
 
         $member_account = $request->member_account;
         $operator_code = $request->operator_code;
-        $banker_account = 'banker'; // or as you prefer
-        $default_player_account = 'P010101'; // or as you prefer
 
         // Lookup operator to get callback_url and secret_key
         $operator = Operator::where('code', $operator_code)
@@ -48,29 +46,21 @@ class ShanLaunchGameController extends Controller
         $callbackUrl = $operator->callback_url ?? 'https://a1yoma.online/api/shan/balance';
         $secret_key = $operator->secret_key;
 
-        // Ensure member, banker, and default player accounts exist
-        $accounts = [
-            $member_account,
-            $banker_account,
-            $default_player_account
-        ];
-
+        // 1. Auto-create member if not exists
         DB::beginTransaction();
-        foreach ($accounts as $acc) {
-            $user = User::where('member_account', $acc)->first();
-            if (!$user) {
-                User::create([
-                    'member_account' => $acc,
-                    'name'           => $acc,
-                    'balance'        => 0,
-                    'password'       => bcrypt('defaultpassword'),
-                    'register_date'  => now(),
-                ]);
-            }
+        $user = User::where('member_account', $member_account)->first();
+        if (!$user) {
+            $user = User::create([
+                'member_account' => $member_account,
+                'name'           => $member_account,
+                'balance'        => 0,
+                'password'       => bcrypt('defaultpassword'),
+                'register_date'  => now(),
+            ]);
         }
         DB::commit();
 
-        // Call client's getbalance API for requested player
+        // 2. Prepare payload for client callback getbalance
         $request_time = time();
         $sign = md5($operator_code . $request_time . 'getbalance' . $secret_key);
         $payload = [
@@ -86,6 +76,7 @@ class ShanLaunchGameController extends Controller
             'sign'          => $sign,
         ];
 
+        // 3. Call client's getbalance API
         $balance = 0;
         try {
             $response = Http::timeout(5)->post($callbackUrl, $payload);
@@ -96,10 +87,11 @@ class ShanLaunchGameController extends Controller
                 }
             }
         } catch (\Exception $e) {
+            // If call fails, fallback to 0 or handle as needed
             $balance = 0;
         }
 
-        // Build launch game URL
+        // 4. Build launch game URL
         $launchGameUrl = 'https://goldendragon7.pro/?user_name=' . urlencode($member_account) . '&balance=' . $balance;
 
         return response()->json([
