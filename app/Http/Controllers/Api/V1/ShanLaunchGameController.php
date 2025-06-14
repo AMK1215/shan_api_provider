@@ -4,10 +4,11 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Http;
-use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use App\Models\Operator;
 
 class ShanLaunchGameController extends Controller
 {
@@ -16,7 +17,7 @@ class ShanLaunchGameController extends Controller
         // Validate input
         $validator = Validator::make($request->all(), [
             'member_account' => 'required|string|max:50',
-            'operator_code'  => 'required|string', // For security and correct sign
+            'operator_code'  => 'required|string',
         ]);
 
         if ($validator->fails()) {
@@ -29,66 +30,65 @@ class ShanLaunchGameController extends Controller
 
         $member_account = $request->member_account;
         $operator_code = $request->operator_code;
-        $currency = 'MMK';
-        $request_time = time();
-        $secret_key = env('SEAMLESS_SECRET_KEY', ''); // Or get from Operator table if multi-operator
-        $sign = md5($operator_code . $request_time . 'getbalance' . $secret_key);
 
-        $getBalancePayload = [
+        // Lookup operator to get callback_url and secret_key
+        $operator = Operator::where('code', $operator_code)
+                            ->where('active', true)
+                            ->first();
+
+        if (!$operator) {
+            return response()->json([
+                'status' => 'fail',
+                'message' => 'Invalid operator code',
+            ], 403);
+        }
+
+        $callbackUrl = $operator->callback_url ?? 'https://a1yoma.online/api/shan/balance';
+        $secret_key = $operator->secret_key;
+
+        // 1. Auto-create member if not exists
+        DB::beginTransaction();
+        $user = User::where('member_account', $member_account)->first();
+        if (!$user) {
+            $user = User::create([
+                'member_account' => $member_account,
+                'name'           => $member_account,
+                'balance'        => 0,
+                'password'       => bcrypt('defaultpassword'),
+                'register_date'  => now(),
+            ]);
+        }
+        DB::commit();
+
+        // 2. Prepare payload for client callback getbalance
+        $request_time = time();
+        $sign = md5($operator_code . $request_time . 'getbalance' . $secret_key);
+        $payload = [
             'batch_requests' => [
                 [
                     'member_account' => $member_account,
-                    'product_code'   => 1002, // or as appropriate
+                    'product_code'   => 1002 // or as required
                 ]
             ],
             'operator_code' => $operator_code,
-            'currency'      => $currency,
+            'currency'      => 'MMK',
             'request_time'  => $request_time,
             'sign'          => $sign,
         ];
 
-        // 1. Call GetBalance API (internal call)
-        $getBalanceApiUrl = url('/api/shan/balance');
-        $response = Http::post($getBalanceApiUrl, $getBalancePayload);
-
-        $resultData = $response->json();
+        // 3. Call client's getbalance API
         $balance = 0;
-        $needCreate = false;
-
-        if (isset($resultData['data'][0]['code']) && $resultData['data'][0]['code'] == 998) {
-            // Member not found (use your SeamlessWalletCode for "MemberNotExist")
-            $needCreate = true;
-        } elseif (isset($resultData['data'][0]['balance'])) {
-            $balance = $resultData['data'][0]['balance'];
-        }
-
-        // 2. If member doesn't exist, create them
-        if ($needCreate) {
-            DB::beginTransaction();
-            $user = User::where('member_account', $member_account)->first();
-            if (!$user) {
-                $user = User::create([
-                    'member_account' => $member_account,
-                    'name'           => $member_account,
-                    'balance'        => 0,
-                    'password'       => bcrypt('defaultpassword'),
-                    'register_date'  => now(),
-                ]);
+        try {
+            $response = Http::timeout(5)->post($callbackUrl, $payload);
+            if ($response->successful()) {
+                $json = $response->json();
+                if (isset($json['data'][0]['balance'])) {
+                    $balance = $json['data'][0]['balance'];
+                }
             }
-            DB::commit();
-
-            // 3. Call GetBalance API again for this new member
-            $request_time = time();
-            $sign = md5($operator_code . $request_time . 'getbalance' . $secret_key);
-            $getBalancePayload['request_time'] = $request_time;
-            $getBalancePayload['sign'] = $sign;
-
-            $response = Http::post($getBalanceApiUrl, $getBalancePayload);
-            $resultData = $response->json();
+        } catch (\Exception $e) {
+            // If call fails, fallback to 0 or handle as needed
             $balance = 0;
-            if (isset($resultData['data'][0]['balance'])) {
-                $balance = $resultData['data'][0]['balance'];
-            }
         }
 
         // 4. Build launch game URL
